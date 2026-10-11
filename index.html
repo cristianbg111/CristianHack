@@ -1,0 +1,916 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>CRISTIAN HACK // Advanced Linux Terminal v4.8.0</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome for Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts: Fira Code & Share Tech Mono -->
+    <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@300;400;500;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Fira Code', monospace;
+            background-color: #030712;
+            color: #00ff66;
+            overflow: hidden;
+            margin: 0;
+            padding: 0;
+            /* Evitar recarga por gestos táctiles tipo pull-to-refresh en WebView / móviles */
+            overscroll-behavior-y: none;
+            touch-action: pan-x pan-y;
+            transition: filter 1s ease, box-shadow 1s ease;
+        }
+
+        /* CRT Screen Simulation Overlay */
+        .crt::before {
+            content: " ";
+            display: block;
+            position: fixed;
+            top: 0; left: 0; bottom: 0; right: 0;
+            background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06));
+            z-index: 99999;
+            background-size: 100% 3px, 3px 100%;
+            pointer-events: none;
+        }
+
+        /* CRT Flicker effect */
+        @keyframes flicker {
+            0% { opacity: 0.97; }
+            50% { opacity: 1; }
+            100% { opacity: 0.98; }
+        }
+        .crt-flicker {
+            animation: flicker 0.15s infinite;
+        }
+
+        /* Dynamic Theme Variables / Classes */
+        .theme-green { --theme-color: #00ff66; --theme-bg: #030712; }
+        .theme-cyan { --theme-color: #00f0ff; --theme-bg: #030a12; }
+        .theme-amber { --theme-color: #ffb700; --theme-bg: #120903; }
+        .theme-red { --theme-color: #ff003c; --theme-bg: #120305; }
+        .theme-purple { --theme-color: #bf00ff; --theme-bg: #0b0312; }
+
+        /* Glow effects */
+        .neon-glow {
+            text-shadow: 0 0 8px var(--theme-color), 0 0 20px var(--theme-color);
+        }
+
+        /* Scrollbar customization */
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #0b0f19;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: var(--theme-color, #00ff66);
+            border-radius: 3px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            opacity: 0.8;
+        }
+
+        /* Matrix Canvas background */
+        #matrix-canvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 0;
+            opacity: 0.18;
+            pointer-events: none;
+        }
+
+        .terminal-container {
+            position: relative;
+            z-index: 10;
+            transition: transform 0.5s ease;
+        }
+
+        .blink-cursor {
+            animation: blink 1s infinite;
+        }
+        @keyframes blink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0; }
+        }
+
+        /* Hex Grid Background decoration */
+        .hex-grid {
+            background-image: radial-gradient(rgba(0, 255, 102, 0.05) 1px, transparent 1px);
+            background-size: 24px 24px;
+        }
+    </style>
+</head>
+<body id="body-root" class="h-full flex flex-col crt crt-flicker hex-grid theme-green" style="color: var(--theme-color, #00ff66);">
+    <canvas id="matrix-canvas"></canvas>
+
+    <header class="bg-black/85 border-b px-4 py-2.5 flex flex-wrap justify-between items-center text-xs z-20 backdrop-blur shadow-lg" style="border-color: rgba(var(--theme-rgb, 0,255,102), 0.4);">
+        <div class="flex items-center space-x-3">
+            <span class="flex h-3 w-3 relative">
+                <span class="animate-ping absolute inline-flex h-full w-full rounded-full opacity-75" style="background-color: var(--theme-color);"></span>
+                <span class="relative inline-flex rounded-full h-3 w-3" style="background-color: var(--theme-color);"></span>
+            </span>
+            <span class="font-bold tracking-wider neon-glow text-sm" style="color: var(--theme-color);">CRISTIAN-OS v4.7.0 // ELITE HACK</span>
+            <span class="hidden md:inline text-gray-500">|</span>
+            <span class="hidden md:inline text-cyan-400"><i class="fa-solid fa-satellite-dish mr-1"></i> ENCRYPTED_SOCKET: 4096-BIT</span>
+        </div>
+        <div class="flex items-center space-x-4 mt-1 sm:mt-0">
+            <span class="text-yellow-400 bg-yellow-950/35 px-2 py-0.5 rounded border border-yellow-500/30"><i class="fa-solid fa-microchip mr-1"></i> CPU: <span id="cpu-load">14%</span></span>
+            <span class="text-cyan-300 bg-cyan-950/35 px-2 py-0.5 rounded border border-cyan-500/30"><i class="fa-solid fa-memory mr-1"></i> RAM: <span id="ram-usage">4.8GB/16GB</span></span>
+            <span class="text-purple-400 bg-purple-950/35 px-2 py-0.5 rounded border border-purple-500/30"><i class="fa-solid fa-network-wired mr-1"></i> PING: <span id="ping-val">11ms</span></span>
+            <button onclick="window.toggleAudio()" id="audio-btn" class="bg-black/80 border px-2.5 py-1 rounded transition text-xs font-bold shadow" style="border-color: var(--theme-color); color: var(--theme-color);">
+                <i class="fa-solid fa-volume-high mr-1" id="audio-icon"></i> AUDIO
+            </button>
+        </div>
+    </header>
+
+    <main class="flex-1 flex flex-col p-2 sm:p-4 md:p-5 max-w-7xl mx-auto w-full z-10 overflow-hidden">
+        
+        <!-- Window Frame Container -->
+        <div class="terminal-container flex-1 flex flex-col bg-black/95 border rounded-lg shadow-2xl overflow-hidden backdrop-blur-md relative" style="border-color: rgba(var(--theme-rgb, 0,255,102), 0.5);">
+            
+            <!-- Window Header Bar -->
+            <div class="border-b px-4 py-2.5 flex justify-between items-center text-xs bg-black/60" style="border-color: rgba(var(--theme-rgb, 0,255,102), 0.4);">
+                <div class="flex items-center space-x-2">
+                    <div class="flex space-x-2">
+                        <div class="w-3 h-3 rounded-full bg-red-500/90 cursor-pointer hover:bg-red-400 shadow-[0_0_5px_red]" title="Clear Buffer" onclick="window.clearTerminal()"></div>
+                        <div class="w-3 h-3 rounded-full bg-yellow-500/90 cursor-pointer hover:bg-yellow-400 shadow-[0_0_5px_yellow]" title="Toggle Matrix" onclick="window.runCommand('matrix')"></div>
+                        <div class="w-3 h-3 rounded-full bg-emerald-500/90 cursor-pointer hover:bg-emerald-400 shadow-[0_0_5px_emerald]" title="Fullscreen" onclick="window.maximizeWindow()"></div>
+                    </div>
+                    <span class="text-gray-300 font-mono ml-3 font-semibold"><i class="fa-solid fa-terminal mr-1" style="color: var(--theme-color);"></i> root@cristian-hack:~ (bash)</span>
+                </div>
+                <div class="hidden sm:flex items-center space-x-4 text-gray-400 text-xs">
+                    <span class="animate-pulse" style="color: var(--theme-color);"><i class="fa-solid fa-shield-cat mr-1"></i> FIREWALL: BYPASSED</span>
+                    <span><i class="fa-solid fa-user-secret mr-1" style="color: var(--theme-color);"></i> User: <strong style="color: var(--theme-color);">Cristian</strong></span>
+                    <span><i class="fa-solid fa-clock text-cyan-400 mr-1"></i> <span id="live-clock">00:00:00</span></span>
+                </div>
+            </div>
+
+            <!-- Terminal Output Scrollable Area with Custom Scroll Buttons -->
+            <div class="relative flex-1 flex overflow-hidden">
+                <div id="terminal-output" class="flex-1 p-4 md:p-6 overflow-y-auto space-y-3 font-mono text-sm leading-relaxed">
+                    <!-- Boot sequence injected via JS -->
+                </div>
+                
+                <!-- Floating Scroll Navigation Buttons for Mobile/Desktop -->
+                <div class="absolute right-2 bottom-3 flex flex-col space-y-1 z-30 opacity-75 hover:opacity-100 transition">
+                    <button onclick="window.scrollTerminal('up')" class="bg-black/80 border p-2 rounded shadow text-xs transition active:scale-95" style="border-color: var(--theme-color); color: var(--theme-color);" title="Scroll Up">
+                        <i class="fa-solid fa-chevron-up"></i>
+                    </button>
+                    <button onclick="window.scrollTerminal('down')" class="bg-black/80 border p-2 rounded shadow text-xs transition active:scale-95" style="border-color: var(--theme-color); color: var(--theme-color);" title="Scroll Down">
+                        <i class="fa-solid fa-chevron-down"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Command Input Form -->
+            <div class="border-t bg-black/95 p-3.5 flex items-center shadow-inner" style="border-color: rgba(var(--theme-rgb, 0,255,102), 0.4);">
+                <span class="font-bold mr-2 text-sm sm:text-base animate-pulse" style="color: var(--theme-color);">root@cristian-hack:~$</span>
+                <input type="text" id="command-input" autocomplete="off" autofocus spellcheck="false"
+                    class="flex-1 bg-transparent border-none outline-none font-mono text-sm sm:text-base" style="color: var(--theme-color); caret-color: var(--theme-color);">
+                <button onclick="window.submitCommand()" class="hidden sm:block ml-2 border px-4 py-1.5 rounded text-xs transition font-bold shadow" style="border-color: var(--theme-color); color: var(--theme-color); background: rgba(0,0,0,0.8);">
+                    EXECUTE
+                </button>
+            </div>
+
+        </div>
+
+        <div class="mt-3 grid grid-cols-4 sm:grid-cols-10 gap-2 text-xs">
+            <button onclick="window.runCommand('help')" class="bg-black/70 border hover:opacity-80 py-2 px-2 rounded transition flex items-center justify-center space-x-1.5 shadow" style="border-color: var(--theme-color); color: var(--theme-color);">
+                <i class="fa-solid fa-circle-question"></i> <span>help</span>
+            </button>
+            <button onclick="window.runCommand('start')" class="bg-black/70 border border-cyan-500/50 hover:border-cyan-400 text-cyan-300 py-2 px-2 rounded hover:bg-cyan-950/60 transition flex items-center justify-center space-x-1.5 shadow font-bold">
+                <i class="fa-solid fa-play text-cyan-400"></i> <span>start</span>
+            </button>
+            <button onclick="window.runCommand('stop')" class="bg-black/70 border border-red-500/50 hover:border-red-400 text-red-400 py-2 px-2 rounded hover:bg-red-950/60 transition flex items-center justify-center space-x-1.5 shadow font-bold">
+                <i class="fa-solid fa-stop text-red-400"></i> <span>stop</span>
+            </button>
+            <button onclick="window.runCommand('danger')" class="bg-black/70 border border-orange-500/60 hover:border-orange-400 text-orange-400 py-2 px-2 rounded hover:bg-orange-950/60 transition flex items-center justify-center space-x-1.5 shadow font-bold animate-pulse">
+                <i class="fa-solid fa-fire text-orange-500"></i> <span>danger</span>
+            </button>
+            <button onclick="window.runCommand('root')" class="bg-black/70 border border-red-600/60 hover:border-red-500 text-red-500 py-2 px-2 rounded hover:bg-red-950/60 transition flex items-center justify-center space-x-1.5 shadow font-bold">
+                <i class="fa-solid fa-skull text-red-500"></i> <span>root</span>
+            </button>
+            <button onclick="window.runCommand('color')" class="bg-black/70 border border-yellow-500/50 hover:border-yellow-400 text-yellow-400 py-2 px-2 rounded hover:bg-yellow-950/60 transition flex items-center justify-center space-x-1.5 shadow font-bold">
+                <i class="fa-solid fa-palette"></i> <span>color</span>
+            </button>
+            <button onclick="window.runCommand('matrix')" class="bg-black/70 border hover:opacity-80 py-2 px-2 rounded transition flex items-center justify-center space-x-1.5 shadow" style="border-color: var(--theme-color); color: var(--theme-color);">
+                <i class="fa-solid fa-code"></i> <span>matrix</span>
+            </button>
+            <button onclick="window.runCommand('scan')" class="bg-black/70 border border-yellow-500/40 hover:border-yellow-400 text-yellow-400 py-2 px-2 rounded hover:bg-yellow-950/60 transition flex items-center justify-center space-x-1.5 shadow">
+                <i class="fa-solid fa-radar"></i> <span>scan</span>
+            </button>
+            <button onclick="window.runCommand('hack')" class="bg-black/70 border border-red-500/40 hover:border-red-400 text-red-400 py-2 px-2 rounded hover:bg-red-950/60 transition flex items-center justify-center space-x-1.5 shadow">
+                <i class="fa-solid fa-terminal"></i> <span>hack</span>
+            </button>
+            <button onclick="window.runCommand('clear')" class="bg-black/70 border border-gray-500/40 hover:border-gray-400 text-gray-300 py-2 px-2 rounded hover:bg-gray-950/60 transition flex items-center justify-center space-x-1.5 shadow">
+                <i class="fa-solid fa-trash-can"></i> <span>clear</span>
+            </button>
+        </div>
+
+    </main>
+
+    <script>
+        const canvas = document.getElementById('matrix-canvas');
+        const ctx = canvas.getContext('2d');
+
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+
+        const katakana = 'アァカサタナハマヤャラワガザダバパイィキシチニヒミリヰギジヂビピウゥクスツヌフムユュルグズブヅプエェケセテネヘメレヱゲゼデベペオォコソトノホモヨョロヲゴゾドボポヴッン';
+        const latin = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789@#$%^&*()*&^%';
+        const alphabet = katakana + latin;
+
+        const fontSize = 16;
+        let columns = canvas.width / fontSize;
+        const rainDrops = [];
+
+        for (let x = 0; x < columns; x++) {
+            rainDrops[x] = 1;
+        }
+
+        let matrixColor = '#00ff66';
+        function drawMatrix() {
+            ctx.fillStyle = 'rgba(3, 7, 18, 0.08)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            ctx.fillStyle = matrixColor;
+            ctx.font = fontSize + 'px monospace';
+
+            for (let i = 0; i < rainDrops.length; i++) {
+                const text = alphabet.charAt(Math.floor(Math.random() * alphabet.length));
+                ctx.fillText(text, i * fontSize, rainDrops[i] * fontSize);
+
+                if (rainDrops[i] * fontSize > canvas.height && Math.random() > 0.975) {
+                    rainDrops[i] = 0;
+                }
+                rainDrops[i]++;
+            }
+        }
+        setInterval(drawMatrix, 30);
+
+        const themes = [
+            { name: 'Neon Green', color: '#00ff66', rgb: '0, 255, 102', class: 'theme-green' },
+            { name: 'Cyber Cyan', color: '#00f0ff', rgb: '0, 240, 255', class: 'theme-cyan' },
+            { name: 'Amber Gold', color: '#ffb700', rgb: '255, 183, 0', class: 'theme-amber' },
+            { name: 'Blood Red', color: '#ff003c', rgb: '255, 0, 60', class: 'theme-red' },
+            { name: 'Ultra Purple', color: '#bf00ff', rgb: '191, 0, 255', class: 'theme-purple' }
+        ];
+
+        window.setTheme = function(themeObj) {
+            const body = document.getElementById('body-root');
+            body.className = `h-full flex flex-col crt crt-flicker hex-grid select-none ${themeObj.class}`;
+            body.style.color = themeObj.color;
+            matrixColor = themeObj.color;
+            document.documentElement.style.setProperty('--theme-color', themeObj.color);
+            document.documentElement.style.setProperty('--theme-rgb', themeObj.rgb);
+        };
+
+        window.randomColorTheme = function() {
+            const randomTheme = themes[Math.floor(Math.random() * themes.length)];
+            window.setTheme(randomTheme);
+            return randomTheme;
+        };
+
+        setInterval(() => {
+            const now = new Date();
+            document.getElementById('live-clock').innerText = now.toTimeString().split(' ')[0];
+            
+            document.getElementById('cpu-load').innerText = (Math.floor(Math.random() * 35) + 12) + '%';
+            document.getElementById('ping-val').innerText = (Math.floor(Math.random() * 6) + 9) + 'ms';
+        }, 1000);
+
+        const terminalOutput = document.getElementById('terminal-output');
+        const commandInput = document.getElementById('command-input');
+        let commandHistory = [];
+        let historyIndex = -1;
+        let audioEnabled = true;
+        let audioCtx = null;
+        let activeHackingInterval = null;
+        let activeDangerInterval = null;
+
+        window.toggleAudio = function() {
+            audioEnabled = !audioEnabled;
+            const btn = document.getElementById('audio-btn');
+            const icon = document.getElementById('audio-icon');
+            if (audioEnabled) {
+                btn.style.background = 'var(--theme-color)';
+                btn.style.color = '#000';
+                icon.className = "fa-solid fa-volume-high mr-1";
+                if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                appendOutput("<span class='text-cyan-400'>[+] Audio synthesizer enabled (High Volume). Keyboard clicks & sound effects online.</span>");
+            } else {
+                btn.style.background = 'rgba(0,0,0,0.8)';
+                btn.style.color = 'var(--theme-color)';
+                icon.className = "fa-solid fa-volume-xmark mr-1";
+                appendOutput("<span class='text-gray-400'>[-] Audio synthesizer disabled.</span>");
+            }
+        };
+
+        function playBeep(freq = 440, duration = 0.05, type = 'sine', volume = 0.25) {
+            if (!audioEnabled || !audioCtx) return;
+            try {
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.type = type;
+                osc.frequency.value = freq;
+                // Increased volume for louder audio feedback
+                gain.gain.setValueAtTime(volume, audioCtx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + duration);
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                osc.start();
+                osc.stop(audioCtx.currentTime + duration);
+            } catch(e) {}
+        }
+
+        function appendOutput(html) {
+            const div = document.createElement('div');
+            div.innerHTML = html;
+            terminalOutput.appendChild(div);
+            terminalOutput.scrollTop = terminalOutput.scrollHeight;
+        }
+
+        const bootAscii = `
+<pre class="font-bold text-xs sm:text-sm overflow-x-auto" style="color: var(--theme-color);">
+ ██████╗██████╗ ██╗███████╗████████╗██╗ █████╗ ███-   ██╗  ██╗ █████╗  ██████╗██╗  ██╗
+██╔════╝██╔══██╗██║██╔════╝╚══██╔══╝██║██╔══██╗████╗  ██║  ██║██╔══██╗██╔════╝██║ ██╔╝
+██║     ██████╔╝██║███████╗   ██║   ██║███████║██╔██╗ ██║  ███████╔╝██║     █████╔╝ 
+██║     ██╔══██╗██║╚════██║   ██║   ██║██╔══██║██║╚██╗██║  ██╔══██║██║     ██╔═██╗ 
+╚██████╗██║  ██║██║███████║   ██║   ██║██║  ██║██║ ╚████║  ██║  ██║╚██████╗██║  ██╗
+ ╚═════╝╚═╝  ╚═╝╚═╝╚══════╝   ╚═╝   ╚═╝╚═╝  ╚═╝╚═╝  ╚═══╝  ╚═╝  ╚═╝ ╚═════╝╚═╝  ╚═╝
+</pre>
+<div class="text-cyan-400 font-bold">CRISTIAN HACK ADVANCED CYBERNETIC TERMINAL [Version 4.7.0]</div>
+<div class="text-gray-400">Type <span class="font-bold" style="color: var(--theme-color);">'start'</span> to initiate live hacker stream, <span class="text-orange-400 font-bold">'danger'</span> for meltdown simulation, <span class="text-red-500 font-bold">'root'</span> for phone terminal wipe simulation, <span class="text-red-400 font-bold">'stop'</span> to halt active streams, or <span class="font-bold" style="color: var(--theme-color);">'help'</span> for options.</div>
+`;
+
+        window.onload = function() {
+            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            const btn = document.getElementById('audio-btn');
+            const icon = document.getElementById('audio-icon');
+            btn.style.background = 'var(--theme-color)';
+            btn.style.color = '#000';
+            icon.className = "fa-solid fa-volume-high mr-1";
+
+            appendOutput(bootAscii);
+            playBeep(600, 0.1);
+        };
+
+        commandInput.addEventListener('keydown', function(e) {
+            playBeep(800 + Math.random()*200, 0.02, 'square', 0.2);
+            if (e.key === 'Enter') {
+                const cmd = commandInput.value.trim();
+                if (cmd !== '') {
+                    commandHistory.push(cmd);
+                    historyIndex = commandHistory.length;
+                    appendOutput(`<span class="text-gray-500">root@cristian-hack:~$</span> <span class="text-white font-bold">${escapeHtml(cmd)}</span>`);
+                    window.runCommand(cmd);
+                    commandInput.value = '';
+                }
+            } else if (e.key === 'ArrowUp') {
+                if (historyIndex > 0) {
+                    historyIndex--;
+                    commandInput.value = commandHistory[historyIndex];
+                }
+                e.preventDefault();
+            } else if (e.key === 'ArrowDown') {
+                if (historyIndex < commandHistory.length - 1) {
+                    historyIndex++;
+                    commandInput.value = commandHistory[historyIndex];
+                } else {
+                    historyIndex = commandHistory.length;
+                    commandInput.value = '';
+                }
+                e.preventDefault();
+            }
+        });
+
+        window.submitCommand = function() {
+            const cmd = commandInput.value.trim();
+            if (cmd !== '') {
+                commandHistory.push(cmd);
+                historyIndex = commandHistory.length;
+                appendOutput(`<span class="text-gray-500">root@cristian-hack:~$</span> <span class="text-white font-bold">${escapeHtml(cmd)}</span>`);
+                window.runCommand(cmd);
+                commandInput.value = '';
+            }
+            commandInput.focus();
+        };
+
+        function escapeHtml(text) {
+            return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+        }
+
+        window.clearTerminal = function() {
+            terminalOutput.innerHTML = '';
+            playBeep(300, 0.1);
+        };
+
+        window.maximizeWindow = function() {
+            if (!document.fullscreenElement) {
+                document.documentElement.requestFullscreen().catch(err => {
+                    appendOutput(`<span class="text-red-400">[-] Error entering fullscreen: ${err.message}</span>`);
+                });
+            } else {
+                if (document.exitFullscreen) {
+                    document.exitFullscreen();
+                }
+            }
+        };
+
+        window.scrollTerminal = function(direction) {
+            const term = document.getElementById('terminal-output');
+            if (direction === 'up') {
+                term.scrollTop -= 120;
+            } else {
+                term.scrollTop += 120;
+            }
+        };
+
+        window.runCommand = function(cmdStr) {
+            const parts = cmdStr.toLowerCase().split(' ');
+            const cmd = parts[0];
+            const arg = parts[1];
+
+            playBeep(520, 0.05);
+
+            switch(cmd) {
+                case 'help':
+                    appendOutput(`
+                        <div class="text-cyan-300 font-bold mb-1">AVAILABLE COMMANDS (CRISTIAN-OS v4.7.0):</div>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1 text-xs">
+                            <div><span class="text-cyan-400 font-bold">start</span> - Launch high-intensity visual hacker exploit stream</div>
+                            <div><span class="text-orange-400 font-bold">danger</span> - Initiate sustained hardware meltdown & thermal fire simulation</div>
+                            <div><span class="text-red-500 font-bold">root</span> - Simular borrado total de datos del terminal telefónico</div>
+                            <div><span class="text-red-400 font-bold">stop</span> - Halt active hacking/danger streams and reset system</div>
+                            <div><span class="text-yellow-400 font-bold">color</span> - Switch terminal theme to a random hacker palette</div>
+                            <div><span class="font-bold" style="color: var(--theme-color);">help</span> - Display this comprehensive help menu</div>
+                            <div><span class="font-bold" style="color: var(--theme-color);">about</span> - About Cristian Hack & system credentials</div>
+                            <div><span class="font-bold" style="color: var(--theme-color);">matrix</span> - Toggle matrix rain speed / data density</div>
+                            <div><span class="font-bold" style="color: var(--theme-color);">scan</span> - Perform network vulnerability subnet scan</div>
+                            <div><span class="font-bold" style="color: var(--theme-color);">hack [target]</span> - Execute simulated root breach protocol</div>
+                            <div><span class="font-bold" style="color: var(--theme-color);">crypto</span> - Check live encrypted Gate.io crypto ticker</div>
+                            <div><span class="font-bold" style="color: var(--theme-color);">sysinfo</span> - Display detailed hardware & kernel info</div>
+                            <div><span class="font-bold" style="color: var(--theme-color);">ping [host]</span> - Test latency & packet loss to target</div>
+                            <div><span class="font-bold" style="color: var(--theme-color);">whoami</span> - Display current effective user ID</div>
+                            <div><span class="font-bold" style="color: var(--theme-color);">dox [name]</span> - Perform simulated OSINT / intelligence lookup</div>
+                            <div><span class="font-bold" style="color: var(--theme-color);">history</span> - Show previously executed terminal commands</div>
+                            <div><span class="font-bold" style="color: var(--theme-color);">clear</span> - Clear terminal window scroll buffer</div>
+                        </div>
+                    `);
+                    break;
+
+                case 'color':
+                    const newTheme = window.randomColorTheme();
+                    appendOutput(`<span class="font-bold" style="color: var(--theme-color);">[+] Theme shifted successfully to: ${newTheme.name} (${newTheme.color})</span>`);
+                    break;
+
+                case 'start':
+                    if (activeHackingInterval || activeDangerInterval) {
+                        appendOutput(`<span class="text-yellow-400">[!] An active stream or danger simulation is already running! Type 'stop' to halt.</span>`);
+                        break;
+                    }
+                    appendOutput(`<span class="text-cyan-400 font-bold text-sm">[+] INITIALIZING DEEP-SPACE KERNEL EXPLOIT MATRIX... (Type 'stop' to terminate)</span>`);
+                    
+                    const randomIP = () => `${Math.floor(Math.random()*220)+12}.${Math.floor(Math.random()*255)}.${Math.floor(Math.random()*255)}.${Math.floor(Math.random()*255)}`;
+                    const randomHexStr = (len = 16) => Array.from({length: len}, () => Math.floor(Math.random()*16).toString(16)).join('').toUpperCase();
+                    const protocols = ['TCP_SYN_FLOOD', 'HTTPS_TUNNEL', 'SSH_BRUTE', 'SQL_INJECT', 'SSL_BYPASS', 'BUFFER_OVERFLOW', 'ROOT_SHELL', 'AES_256_DECRYPT', 'FIREWALL_BYPASS', 'KERNEL_HOOK', 'MEMORY_DUMP', 'RSA_4096_CRACK', 'ZERO_DAY_EXPLOIT', 'DNS_SPOOF'];
+                    const deepHackerEvents = [
+                        "TARGET MAINFRAME RECONNAISSANCE: NODE VERIFIED",
+                        "DECRYPTING SECURE 4096-BIT RSA CIPHERBLOCK...",
+                        "BYPASSING PENTAGON SECURE SUB-ROUTINE LAYER 4",
+                        "INJECTING POLYMORPHIC SHELLCODE INTO PORT 443",
+                        "ROOTKIT KERNEL MODULE DEPLOYED SUCCESSFULLY",
+                        "SPOOFING MAC ADDRESS // ANONYMOUS PROXY ACTIVE",
+                        "ESTABLISHING SECURE QUANTUM ENCLAVE TUNNEL",
+                        "ZERO-DAY EXPLOIT VECTOR BRUTEFORCED & LOCKED",
+                        "EXFILTRATING CLASSIFIED DATABASE RECORDS (8.4 GB/s)",
+                        "BYPASSING BIOMETRIC GATEWAY AUTHENTICATION",
+                        "INSPECTING KERNEL MEMORY REGISTERS 0x7FFF...",
+                        "OVERWRITING STACK POINTERS // ROOT PRIVILEGES ELEVATED"
+                    ];
+                    
+                    activeHackingInterval = setInterval(() => {
+                        const roll = Math.random();
+                        const timeStr = new Date().toTimeString().split(' ')[0];
+                        
+                        if (roll < 0.28) {
+                            const ip1 = randomIP();
+                            const ip2 = randomIP();
+                            const proto = protocols[Math.floor(Math.random() * protocols.length)];
+                            const port = Math.floor(Math.random() * 55000) + 1024;
+                            appendOutput(`
+                                <div class="bg-black/70 border-l-4 p-2 my-1 text-xs font-mono shadow" style="border-color: var(--theme-color);">
+                                    <span class="text-gray-500">[${timeStr}]</span> 
+                                    <span class="font-bold text-cyan-300">[${proto}]</span> 
+                                    <span class="text-white">${ip1}:${port}</span> &rarr; <span class="text-white">${ip2}:443</span> 
+                                    | <span class="text-purple-400">HASH: 0x${randomHexStr(12)}</span> 
+                                    | <span class="text-emerald-400 font-bold">SUCCESS</span>
+                                </div>
+                            `);
+                        } else if (roll < 0.52) {
+                            const line1 = randomHexStr(16);
+                            const line2 = randomHexStr(16);
+                            const line3 = randomHexStr(16);
+                            appendOutput(`
+                                <div class="text-[11px] font-mono text-gray-300 bg-gray-950/60 p-2 rounded border border-gray-800 my-1">
+                                    <span style="color: var(--theme-color);">MEM_DUMP 0x${randomHexStr(6)}:</span> <span class="text-emerald-400">${line1}</span> <span class="text-cyan-400">${line2}</span> <span class="text-yellow-400">${line3}</span> <span class="text-purple-400">[VERIFIED]</span>
+                                </div>
+                            `);
+                        } else if (roll < 0.75) {
+                            const codeBlock = `${randomHexStr(8)}-${randomHexStr(4)}-${randomHexStr(4)}-${randomHexStr(12)}`;
+                            appendOutput(`
+                                <div class="text-xs font-mono text-yellow-400 bg-yellow-950/30 border border-yellow-500/40 px-3 py-1.5 rounded flex justify-between items-center my-1 shadow">
+                                    <span><i class="fa-solid fa-lock-open mr-1.5"></i> ENCLAVE_KEY: <span class="text-white">${codeBlock}</span></span>
+                                    <span class="text-[10px] bg-yellow-900/70 text-yellow-200 px-2 py-0.5 rounded animate-pulse">DECRYPTING SHA-512...</span>
+                                </div>
+                            `);
+                        } else if (roll < 0.90) {
+                            const quote = deepHackerEvents[Math.floor(Math.random() * deepHackerEvents.length)];
+                            appendOutput(`
+                                <div class="text-xs font-bold text-red-400 bg-red-950/50 px-3 py-1.5 rounded border border-red-500/50 flex items-center shadow-lg my-1">
+                                    <i class="fa-solid fa-triangle-exclamation mr-2 animate-pulse text-sm"></i>
+                                    <span>${quote}</span>
+                                </div>
+                            `);
+                        } else {
+                            const targetIP = randomIP();
+                            appendOutput(`
+                                <div class="text-[11px] font-mono text-cyan-300 bg-cyan-950/30 border border-cyan-500/30 p-1.5 rounded my-1 flex justify-between items-center">
+                                    <span><i class="fa-solid fa-network-wired mr-1"></i> NODE_TARGET: ${targetIP}</span>
+                                    <span class="text-emerald-400"><i class="fa-solid fa-check mr-1"></i> ROOT_SHELL_ATTACHED</span>
+                                </div>
+                            `);
+                        }
+                    }, 420);
+                    break;
+
+                case 'danger':
+                    if (activeHackingInterval || activeDangerInterval) {
+                        appendOutput(`<span class="text-yellow-400">[!] An active stream or danger simulation is already running! Type 'stop' to halt.</span>`);
+                        break;
+                    }
+                    appendOutput(`<span class="text-orange-500 font-bold text-base animate-pulse">[!] ADVERTENCIA: SIMULACIÓN DE FUSIÓN TÉRMICA Y LLAMAS INICIADA. TEMPERATURA CRÍTICA. ¡CONTINÚA HASTA QUE EJECUTES 'stop'!</span>`);
+                    playBeep(220, 0.4, 'sawtooth', 0.35);
+
+                    const bodyRoot = document.getElementById('body-root');
+                    const terminalBox = document.querySelector('.terminal-container');
+                    
+                    bodyRoot.style.boxShadow = 'inset 0 0 140px rgba(255, 69, 0, 0.92)';
+                    bodyRoot.style.filter = 'sepia(0.9) hue-rotate(-35deg) saturate(4)';
+                    if (terminalBox) terminalBox.style.transform = 'skewY(1.5deg) rotate(0.5deg)';
+
+                    let dangerStepCount = 0;
+                    const hazardHex = (len = 16) => Array.from({length: len}, () => Math.floor(Math.random()*16).toString(16)).join('').toUpperCase();
+
+                    activeDangerInterval = setInterval(() => {
+                        dangerStepCount++;
+                        playBeep(130 + (dangerStepCount % 5) * 25, 0.2, 'sawtooth', 0.3);
+                        const timeStr = new Date().toTimeString().split(' ')[0];
+
+                        const hazardRoll = Math.random();
+                        if (hazardRoll < 0.33) {
+                            appendOutput(`
+                                <div class="bg-red-950/90 border-l-4 border-red-500 p-2.5 my-1 text-xs font-mono text-orange-300 shadow-xl animate-pulse">
+                                    <span class="text-red-400">[${timeStr}] 🔥 ALERTA DE FUEGO:</span> SECTOR DE ALIMENTACIÓN 0x${hazardHex(4)} CALCINÁNDOSE // TEMP: <span class="text-white font-bold">${118 + (dangerStepCount % 20)}°C</span> // HUMO DENSO EN LA PLACA BASE.
+                                />
+                                </div>
+                            `);
+                        } else if (hazardRoll < 0.66) {
+                            appendOutput(`
+                                <div class="text-[11px] font-mono text-red-400 bg-black/90 p-2 rounded border border-red-600/70 my-1 shadow">
+                                    <span class="text-orange-400">⚡ CORTOCIRCUITO CRÍTICO:</span> FUSIBLE PRINCIPAL FUNDIDO // SOBRECARGA 750V // PÉRDIDA DE INTEGRIDAD ESTRUCTURAL EN 0x${hazardHex(8)}
+                                </div>
+                            `);
+                        } else {
+                            appendOutput(`
+                                <div class="text-xs font-bold text-yellow-200 bg-red-900/80 px-3 py-2 rounded border border-orange-500 flex items-center shadow-2xl my-1">
+                                    <i class="fa-solid fa-fire text-orange-500 fa-beat mr-2.5 text-base"></i>
+                                    <span>DESTRUCCIÓN TÉRMICA ACTIVA // DAÑO ACUMULADO AL SISTEMA: ${(dangerStepCount * 2.8).toFixed(1)}% (Escribe 'stop' para apagar el fuego)</span>
+                                </div>
+                            `);
+                        }
+                    }, 1200);
+                    break;
+
+                case 'root':
+                    if (activeHackingInterval || activeDangerInterval) {
+                        appendOutput(`<span class="text-yellow-400">[!] Hay otra simulación activa. Usa 'stop' primero.</span>`);
+                        break;
+                    }
+                    appendOutput(`<span class="text-red-500 font-bold text-sm">[!] ADVERTENCIA CRÍTICA: ACCESO ROOT CONCEDIDO. INICIANDO PROTOCOLO DE BORRADOR FORENSE EN EL TERMINAL TELEFÓNICO...</span>`);
+                    playBeep(440, 0.25, 'sawtooth', 0.4);
+
+                    const rootProgId = 'root_prog_' + Math.random().toString(36).substring(2, 9);
+                    appendOutput(`
+                        <div class="my-3 p-3 bg-red-950/30 border border-red-600/50 rounded shadow-lg">
+                            <div class="text-red-400 text-xs font-bold mb-2 flex items-center justify-between">
+                                <span><i class="fa-solid fa-triangle-exclamation mr-1.5 animate-pulse"></i> BORRANDO DATOS DEL TERMINAL TELEFÓNICO (ANDROID / iOS KERNEL)...</span>
+                                <span id="${rootProgId}_pct" class="text-white font-mono">0%</span>
+                            </div>
+                            <div class="w-full bg-black border border-red-800 rounded h-3.5 overflow-hidden p-0.5 shadow-inner">
+                                <div id="${rootProgId}" class="h-full w-0 transition-all duration-300 bg-red-600 rounded-sm"></div>
+                            </div>
+                        </div>
+                    `);
+
+                    const phoneWipeSteps = [
+                        "[-] Desmontando particiones seguras /data y /system...",
+                        "[-] Obteniendo claves de descifrado AES-GCM del Almacenamiento Interno...",
+                        "[-] Formateando base de datos SQLite de WhatsApp y Telegram...",
+                        "[-] Sobrescribiendo bloques de memoria NAND Flash con ceros (0x00)...",
+                        "[-] Eliminando registros NVRAM, IMEI caches y huellas biométricas...",
+                        "[-] Purgando credenciales del llavero de Apple Keychain / Google KeyStore...",
+                        "[-] Desinstalando servicios de Google Play / Apple CoreServices...",
+                        "[-] Desconectando pasarela de radiofrecuencia baseband (Baseband SIM Reset)...",
+                        "[-] Reiniciando en modo recovery sin sistema operativo (Brick State)...",
+                        "<span class='text-emerald-400 font-bold'>[+] ¡BORRADO COMPLETADO CON ÉXITO! El terminal telefónico ha sido totalmente formateado y purgado de la red.</span>"
+                    ];
+
+                    let currentPercent = 0;
+                    let stepIndex = 0;
+                    const rootInterval = setInterval(() => {
+                        currentPercent += Math.floor(Math.random() * 4) + 1; // Slower increment for realism
+                        if (currentPercent >= 100) {
+                            currentPercent = 100;
+                            clearInterval(rootInterval);
+                            playBeep(880, 0.5, 'sine', 0.45);
+                        } else {
+                            playBeep(320 + (currentPercent % 7) * 40, 0.08, 'sawtooth', 0.3);
+                        }
+
+                        const barEl = document.getElementById(rootProgId);
+                        const pctEl = document.getElementById(rootProgId + '_pct');
+                        if (barEl) barEl.style.width = currentPercent + '%';
+                        if (pctEl) pctEl.innerText = currentPercent + '%';
+
+                        if (stepIndex < phoneWipeSteps.length && currentPercent >= (stepIndex + 1) * (100 / phoneWipeSteps.length)) {
+                            appendOutput(`<div class="text-xs font-mono text-gray-300 ml-2">↳ ${phoneWipeSteps[stepIndex]}</div>`);
+                            stepIndex++;
+                        }
+                    }, 450); // Slower interval for realistic pacing
+                    break;
+
+                case 'stop':
+                    let haltedSomething = false;
+                    if (activeHackingInterval) {
+                        clearInterval(activeHackingInterval);
+                        activeHackingInterval = null;
+                        haltedSomething = true;
+                    }
+                    if (activeDangerInterval) {
+                        clearInterval(activeDangerInterval);
+                        activeDangerInterval = null;
+                        haltedSomething = true;
+
+                        const bodyRoot = document.getElementById('body-root');
+                        const terminalBox = document.querySelector('.terminal-container');
+                        bodyRoot.style.filter = 'none';
+                        bodyRoot.style.boxShadow = 'none';
+                        if (terminalBox) terminalBox.style.transform = 'none';
+                    }
+
+                    if (haltedSomething) {
+                        appendOutput(`<span class="text-red-400 font-bold">[-] ACTIVE STREAMS & MELTDOWN SIMULATIONS HALTED BY OPERATOR. System cooling down & firewall secured.</span>`);
+                    } else {
+                        appendOutput(`<span class="text-gray-400">[-] No active hacking stream or danger simulation running. Type 'start' or 'danger' to begin.</span>`);
+                    }
+                    break;
+
+                case 'about':
+                    appendOutput(`
+                        <div class="p-3 border border-cyan-500/40 bg-cyan-950/20 rounded">
+                            <div class="text-cyan-400 font-bold mb-1"><i class="fa-solid fa-user-secret mr-2"></i> CRISTIAN HACK PROFILE v4.7.0</div>
+                            <p class="text-gray-300 text-xs leading-relaxed">
+                                Cristian Hack is an elite cybernetic terminal simulator built for immersive hacking aesthetics, featuring continuous IP streams, exploit payload simulations, thermal meltdown simulations, telephone data wipe simulations, customizable color themes, and retro terminal visuals.
+                            </p>
+                        </div>
+                    `);
+                    break;
+
+                case 'matrix':
+                    appendOutput(`<span class="font-bold" style="color: var(--theme-color);">[+] Matrix data stream density adjusted. Reality matrix shifting...</span>`);
+                    break;
+
+                case 'scan':
+                    simulateProgress("SCANNING SUBNET 192.168.1.0/24...", [
+                        "[-] Target IP: 192.168.1.1 [ROUTER] - PORT 80 (HTTP) OPEN",
+                        "[-] Target IP: 192.168.1.105 [DESKTOP] - PORT 22 (SSH) OPEN",
+                        "[-] Target IP: 192.168.1.112 [MAINFRAME] - PORT 443 (HTTPS) OPEN",
+                        "[-] Target IP: 192.168.1.200 [NAS] - PORT 21 (FTP) VULNERABLE",
+                        `<span class='font-bold' style='color: var(--theme-color);'>[+] Scan complete. 4 active hosts discovered.</span>`
+                    ]);
+                    break;
+
+                case 'hack':
+                    const target = arg || 'mainframe.corp';
+                    simulateProgress(`INITIATING EXPLOIT PAYLOAD ON [${target.toUpperCase()}]...`, [
+                        "[*] Bypassing firewall packet inspection...",
+                        "[*] Injecting SQL payload into authentication vector...",
+                        "[*] Spawning reverse TCP shell on port 4444...",
+                        `<span class='font-bold' style='color: var(--theme-color);'>[SUCCESS] Root access granted. Welcome to the system, Cristian.</span>`
+                    ]);
+                    break;
+
+                case 'crypto':
+                    appendOutput(`<span class="text-yellow-400"><i class="fa-solid fa-spinner fa-spin mr-1"></i> Querying Gate.io API oracles for real-time orderbook tickers...</span>`);
+                    
+                    fetch('https://api.gateio.ws/api/v4/spot/tickers')
+                        .then(res => res.json())
+                        .then(tickers => {
+                            const getPrice = (pair) => {
+                                const found = tickers.find(t => t.currency_pair === pair);
+                                return found ? parseFloat(found.last).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: found.last < 0.0001 ? 8 : 4}) : null;
+                            };
+
+                            const btcUsd = getPrice('BTC_USDT') || '74,032.17';
+                            const kasUsd = getPrice('KAS_USDT') || '0.0411';
+                            const qubUsd = getPrice('QUBIC_USDT') || '0.00000065';
+
+                            appendOutput(`
+                                <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
+                                    <div class="border p-2 bg-black/60 rounded" style="border-color: rgba(var(--theme-rgb, 0,255,102), 0.3);">
+                                        <div class="text-gray-400 flex items-center justify-between"><span class="font-bold">GATE.IO: BTC/USDT</span><i class="fa-brands fa-bitcoin text-yellow-400"></i></div>
+                                        <div class="font-bold text-sm mt-1" style="color: var(--theme-color);">$${btcUsd} <span class="text-green-400 text-[10px]">LIVE</span></div>
+                                    </div>
+                                    <div class="border border-cyan-500/30 p-2 bg-black/60 rounded">
+                                        <div class="text-gray-400 flex items-center justify-between"><span class="font-bold">GATE.IO: KAS/USDT</span><i class="fa-solid fa-coins text-cyan-400"></i></div>
+                                        <div class="text-cyan-400 font-bold text-sm mt-1">$${kasUsd} <span class="text-green-400 text-[10px]">LIVE</span></div>
+                                    </div>
+                                    <div class="border border-purple-500/30 p-2 bg-black/60 rounded">
+                                        <div class="text-gray-400 flex items-center justify-between"><span class="font-bold">GATE.IO: QUBIC/USDT</span><i class="fa-solid fa-cube text-purple-400"></i></div>
+                                        <div class="text-purple-400 font-bold text-sm mt-1">$${qubUsd} <span class="text-green-400 text-[10px]">LIVE</span></div>
+                                    </div>
+                                </div>
+                            `);
+                        })
+                        .catch(err => {
+                            appendOutput(`
+                                <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
+                                    <div class="border p-2 bg-black/60 rounded" style="border-color: rgba(var(--theme-rgb, 0,255,102), 0.3);">
+                                        <div class="text-gray-400">GATE.IO: BTC/USDT</div>
+                                        <div class="font-bold text-sm mt-1" style="color: var(--theme-color);">$74,032.17 <span class="text-green-400 text-[10px]">CACHED</span></div>
+                                    </div>
+                                    <div class="border border-cyan-500/30 p-2 bg-black/60 rounded">
+                                        <div class="text-gray-400">GATE.IO: KAS/USDT</div>
+                                        <div class="text-cyan-400 font-bold text-sm mt-1">$0.0411 <span class="text-green-400 text-[10px]">CACHED</span></div>
+                                    </div>
+                                    <div class="border border-purple-500/30 p-2 bg-black/60 rounded">
+                                        <div class="text-gray-400">GATE.IO: QUBIC/USDT</div>
+                                        <div class="text-purple-400 font-bold text-sm mt-1">$0.00000065 <span class="text-green-400 text-[10px]">CACHED</span></div>
+                                    </div>
+                                </div>
+                            `);
+                        });
+                    break;
+
+                case 'sysinfo':
+                    appendOutput(`
+                        <div class="text-xs space-y-1 text-gray-300">
+                            <div><span style="color: var(--theme-color);">OS:</span> CristianOS Linux Kernel 6.12.0-generic x86_64</div>
+                            <div><span style="color: var(--theme-color);">Uptime:</span> 14 days, 7 hours, 22 mins</div>
+                            <div><span style="color: var(--theme-color);">Shell:</span> bash 5.2.15(1)-release</div>
+                            <div><span style="color: var(--theme-color);">Resolution:</span> ${window.innerWidth}x${window.innerHeight}</div>
+                            <div><span style="color: var(--theme-color);">Security Module:</span> SELinux (Enforcing) / AppArmor Active</div>
+                        </div>
+                    `);
+                    break;
+
+                case 'ping':
+                    const pingTarget = arg || '127.0.0.1';
+                    appendOutput(`<span class="text-cyan-400">PING ${pingTarget} (56(84) bytes of data):</span>`);
+                    let pingCount = 0;
+                    const pingInterval = setInterval(() => {
+                        pingCount++;
+                        const timeMs = (Math.random() * 15 + 4).toFixed(1);
+                        appendOutput(`<span class="text-gray-300">64 bytes from ${pingTarget}: icmp_seq=${pingCount} ttl=117 time=${timeMs} ms</span>`);
+                        if (pingCount >= 4) {
+                            clearInterval(pingInterval);
+                            appendOutput(`<span class="text-green-400">--- ${pingTarget} ping statistics ---</span>`);
+                            appendOutput(`<span class="text-gray-300">4 packets transmitted, 4 received, 0% packet loss, time 3004ms</span>`);
+                        }
+                    }, 400);
+                    break;
+
+                case 'whoami':
+                    appendOutput(`<span class="font-bold text-yellow-400">root (uid=0 gid=0 euid=0) // PRIVILEGED MASTER OPERATOR</span>`);
+                    break;
+
+                case 'pass':
+                    appendOutput(`
+                        <div class="p-3 border border-yellow-500/40 bg-yellow-950/20 rounded text-xs space-y-3 font-mono">
+                            <div class="text-yellow-400 font-bold flex items-center border-b border-yellow-500/30 pb-1.5"><i class="fa-solid fa-key mr-2"></i> DECRYPTED VAULT // PRIVATE CREDENTIALS STORE</div>
+                            <div class="whitespace-pre-wrap text-gray-200 leading-relaxed bg-black/60 p-3 rounded border border-yellow-500/20">U : GL167739
+P : WNLGSXHY
+Pin: 7815
+
+Cambiada a tuty852456
+
+e dn- 5?w4wKCZE8NF
+Clave CElectr 05688325B
+
+Pin cred - 0625
+
+Realmadrid Nº 287744 - 852456
+
+939808
+
+ES24 0030 5089 5603 9148 0273
+
+mi cuenta es ES78 3190 2082 2746 1693 3729
+
+pepi - 05564223V
+	245056	P6g139
+
+Frances Banco 666048GY  TUty8524   http://www.transatplan.com/
+cuena 666044QZ
+Kbic - TUty852456#
+
+Bin Pin 8165
+Alarma Chalet - 654102031 - TUty852456 -16 de abril ultima recarga
+
+Flix - cristianbg@gmail.com
+	tuty852456
+
+Pepe cristianbg@gmail.com 852456
+
+rvjburgos@gmail.com LBurgos22
+Ivan TBK xtroyano@hotmail.com ABcd1234
+
+Luz- 70577721J - TUty852456@
+Clave Permanente TUty852456@@
+Proton - xtroyano@hotmail.com - TUty852456@
+
+http://crystalpremium.otts.pro/get.php?username=645813660&password=OZKLSLZOHY&output=ts&type=m3u_plus</div>
+                        </div>
+                    `);
+                    break;
+
+                case 'dox':
+                    const doxName = arg || 'target_user';
+                    simulateProgress(`GATHERING OSINT INTEL FOR [${doxName.toUpperCase()}]...`, [
+                        "[*] Querying dark web leak repositories...",
+                        "[*] Correlating social media API tokens & DNS records...",
+                        "[*] Tracing active IP geolocation nodes...",
+                        `<span class='text-cyan-300'>[RESULT] Dossier compiled for ${doxName}: Status = ACTIVE (Risk Level: HIGH)</span>`
+                    ]);
+                    break;
+
+                case 'history':
+                    appendOutput(`
+                        <div class="text-xs space-y-1 text-gray-300">
+                            <div class="text-cyan-400 font-bold mb-1">COMMAND HISTORY BUFFER:</div>
+                            ${commandHistory.slice(-10).map((c, i) => `<div><span class="text-gray-500">${i+1}</span>  ${escapeHtml(c)}</div>`).join('')}
+                        </div>
+                    `);
+                    break;
+
+                case 'clear':
+                    window.clearTerminal();
+                    break;
+
+                case '':
+                    break;
+
+                default:
+                    appendOutput(`<span class="text-red-400">[-] Command not recognized: '${escapeHtml(cmd)}'. Type 'help' for available commands.</span>`);
+                    break;
+            }
+            terminalOutput.scrollTop = terminalOutput.scrollHeight;
+        };
+
+        function simulateProgress(title, steps) {
+            const id = 'prog_' + Math.random().toString(36).substring(2, 9);
+            appendOutput(`
+                <div class="my-2">
+                    <div class="text-yellow-400 text-xs mb-1">${title}</div>
+                    <div class="w-full bg-gray-900 border rounded h-3 overflow-hidden" style="border-color: rgba(var(--theme-rgb, 0,255,102), 0.3);">
+                        <div id="${id}" class="h-full w-0 transition-all duration-300" style="background-color: var(--theme-color);"></div>
+                    </div>
+                </div>
+            `);
+
+            let progress = 0;
+            const bar = document.getElementById(id);
+            const interval = setInterval(() => {
+                progress += Math.floor(Math.random() * 20) + 10;
+                if (progress >= 100) {
+                    progress = 100;
+                    clearInterval(interval);
+                    steps.forEach(step => appendOutput(`<div class="text-xs">${step}</div>`));
+                }
+                if (bar) bar.style.width = progress + '%';
+            }, 150);
+        }
+    </script>
+</body>
+</html>
